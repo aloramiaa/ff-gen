@@ -40,58 +40,28 @@ COUPLES_COUNTER = 0
 RARITY_SCORE_THRESHOLD = 3
 RARITY_SCORE_THRESHOLD = 3
 LOCK = threading.Lock()
-RARITY_SCORE_THRESHOLD = 3
-LOCK = threading.Lock()
-R2_ENDPOINT = None
-R2_ACCESS_KEY = None
-R2_SECRET_KEY = None
-R2_BUCKET = None
-S3_CLIENT = None
+FIREBASE_URL = None
+FIREBASE_SECRET = None
 
-def init_s3_client():
-    global S3_CLIENT, R2_ENDPOINT, R2_ACCESS_KEY, R2_SECRET_KEY
-    if not S3_CLIENT and all([R2_ENDPOINT, R2_ACCESS_KEY, R2_SECRET_KEY]):
-        try:
-            import boto3
-            from botocore.config import Config
-            S3_CLIENT = boto3.client(
-                's3',
-                endpoint_url=R2_ENDPOINT,
-                aws_access_key_id=R2_ACCESS_KEY,
-                aws_secret_access_key=R2_SECRET_KEY,
-                config=Config(signature_version='s3v4'),
-                region_name='auto'
-            )
-        except Exception as e:
-            print_error(f"Failed to initialize R2 client: {e}")
-
-def upload_to_r2(data, folder):
-    global S3_CLIENT, R2_BUCKET
-    if not S3_CLIENT or not R2_BUCKET:
+def upload_to_firebase(data, node):
+    global FIREBASE_URL, FIREBASE_SECRET
+    if not FIREBASE_URL:
         return
     
     try:
-        # Create a unique filename for object storage
-        uid = data.get('uid', 'unknown')
-        if not uid:
-             # handle couples where data structure might differ or uid might be missing at root
-             if 'account1' in data:
-                 uid = data['couple_id']
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-        key = f"{folder}/{uid}_{timestamp}.json"
-        
-        json_body = json.dumps(data, indent=2, ensure_ascii=False)
-        
-        S3_CLIENT.put_object(
-            Bucket=R2_BUCKET,
-            Key=key,
-            Body=json_body.encode('utf-8'),
-            ContentType='application/json'
-        )
-        print(f"{Fore.LIGHTGREEN_EX}{Colors.BRIGHT}✅ Uploaded to R2: {key}{Colors.RESET}")
+        url = f"{FIREBASE_URL}/{node}.json"
+        if FIREBASE_SECRET:
+            url += f"?auth={FIREBASE_SECRET}"
+            
+        response = requests.post(url, json=data, timeout=10)
+        if response.status_code == 200:
+            # Use color codes directly or helper if available in thread context, 
+            # safely falling back to print if Helpers aren't thread-safe (they are just prints)
+            print(f"{Fore.LIGHTGREEN_EX}{Colors.BRIGHT}✅ Firebase upload successful: {node}{Colors.RESET}")
+        else:
+            print(f"{Fore.YELLOW}{Colors.BRIGHT}⚠️ Firebase upload returned: {response.status_code}{Colors.RESET}")
     except Exception as e:
-        print_error(f"R2 upload failed: {e}")
+        print_error(f"Firebase upload failed: {e}")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_FOLDER = os.path.join(CURRENT_DIR, "BIGBULL-ERA")
@@ -264,13 +234,6 @@ def save_rare_account(account_data, rarity_type, reason, rarity_score, is_ghost=
             'thread_id': account_data.get('thread_id', 'N/A')
         }
         
-        # Upload to R2 (Prioritize Cloud Storage)
-        if R2_BUCKET:
-            try:
-                threading.Thread(target=upload_to_r2, args=(rare_entry, "rare_accounts")).start()
-            except Exception as e:
-                print_error(f"Failed to start R2 upload thread: {e}")
-
         file_lock = get_file_lock(rare_filename)
         with file_lock:
             rare_list = []
@@ -290,10 +253,10 @@ def save_rare_account(account_data, rarity_type, reason, rarity_score, is_ghost=
                     json.dump(rare_list, f, indent=2, ensure_ascii=False)
                 os.replace(temp_filename, rare_filename)
                 
-                with open(temp_filename, 'w', encoding='utf-8') as f:
-                    json.dump(rare_list, f, indent=2, ensure_ascii=False)
-                os.replace(temp_filename, rare_filename)
-                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(rare_entry, "rare_accounts")).start()
+                    
                 return True
             else:
                 return False
@@ -331,13 +294,6 @@ def save_couples_account(account1, account2, reason, is_ghost=False):
             'date_matched': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        # Upload to R2 (Prioritize Cloud Storage)
-        if R2_BUCKET:
-            try:
-                threading.Thread(target=upload_to_r2, args=(couples_entry, "couples_accounts")).start()
-            except Exception as e:
-                print_error(f"Failed to start R2 upload thread: {e}")
-
         file_lock = get_file_lock(couples_filename)
         with file_lock:
             couples_list = []
@@ -357,10 +313,10 @@ def save_couples_account(account1, account2, reason, is_ghost=False):
                     json.dump(couples_list, f, indent=2, ensure_ascii=False)
                 os.replace(temp_filename, couples_filename)
                 
-                with open(temp_filename, 'w', encoding='utf-8') as f:
-                    json.dump(couples_list, f, indent=2, ensure_ascii=False)
-                os.replace(temp_filename, couples_filename)
-                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(couples_entry, "couples_accounts")).start()
+
                 return True
             else:
                 return False
@@ -396,8 +352,7 @@ def install_requirements():
         'pycryptodome',
         'colorama',
         'urllib3',
-        'psutil',
-        'boto3'
+        'psutil'
     ]
     
     print(f"{get_random_color()}{Colors.BRIGHT}🔍 Checking required packages...{Colors.RESET}")
@@ -577,13 +532,6 @@ def save_jwt_token(account_data, jwt_token, region, is_ghost=False):
             'thread_id': account_data.get('thread_id', 'N/A')
         }
         
-        # Upload to R2 (Prioritize Cloud Storage)
-        if R2_BUCKET:
-            try:
-                threading.Thread(target=upload_to_r2, args=(token_entry, "jwt_tokens")).start()
-            except Exception as e:
-                print_error(f"Failed to start R2 upload thread: {e}")
-
         file_lock = get_file_lock(token_filename)
         with file_lock:
             tokens_list = []
@@ -605,11 +553,10 @@ def save_jwt_token(account_data, jwt_token, region, is_ghost=False):
                 
                 os.replace(temp_filename, token_filename)
                 
-                
-                
-                
-                os.replace(temp_filename, token_filename)
-                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(token_entry, "jwt_tokens")).start()
+
                 return True
             else:
                 return False
@@ -635,13 +582,6 @@ def save_normal_account(account_data, region, is_ghost=False):
             'thread_id': account_data.get('thread_id', 'N/A')
         }
         
-        # Upload to R2 (Prioritize Cloud Storage)
-        if R2_BUCKET:
-            try:
-                threading.Thread(target=upload_to_r2, args=(account_entry, "accounts")).start()
-            except Exception as e:
-                print_error(f"Failed to start R2 upload thread: {e}")
-
         file_lock = get_file_lock(account_filename)
         with file_lock:
             accounts_list = []
@@ -663,11 +603,10 @@ def save_normal_account(account_data, region, is_ghost=False):
                 
                 os.replace(temp_filename, account_filename)
                 
-                
-                
-                
-                os.replace(temp_filename, account_filename)
-                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(account_entry, "accounts")).start()
+
                 return True
             else:
                 return False
@@ -1175,17 +1114,17 @@ def generate_accounts_flow():
 
     run_generation(selected_region, account_count, account_name, password_prefix, RARITY_SCORE_THRESHOLD, thread_count, is_ghost)
 
-def run_generation(region, account_count, account_name, password_prefix, rarity_threshold, thread_count, is_ghost=False, r2_endpoint=None, r2_access_key=None, r2_secret_key=None, r2_bucket=None):
-    global SUCCESS_COUNTER, TARGET_ACCOUNTS, RARE_COUNTER, COUPLES_COUNTER, EXIT_FLAG, RARITY_SCORE_THRESHOLD, R2_ENDPOINT, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET
+def run_generation(region, account_count, account_name, password_prefix, rarity_threshold, thread_count, is_ghost=False, firebase_url=None, firebase_secret=None):
+    global SUCCESS_COUNTER, TARGET_ACCOUNTS, RARE_COUNTER, COUPLES_COUNTER, EXIT_FLAG, RARITY_SCORE_THRESHOLD, FIREBASE_URL, FIREBASE_SECRET
     
     # Initialize globals
     RARITY_SCORE_THRESHOLD = rarity_threshold
-    R2_ENDPOINT = r2_endpoint
-    R2_ACCESS_KEY = r2_access_key
-    R2_SECRET_KEY = r2_secret_key
-    R2_BUCKET = r2_bucket
+    FIREBASE_URL = firebase_url
+    FIREBASE_SECRET = firebase_secret
     
-    init_s3_client()
+    if FIREBASE_URL:
+        # Strip trailing slash
+        FIREBASE_URL = FIREBASE_URL.rstrip('/')
 
     start_time = time.time()
     threads = []
@@ -1342,10 +1281,8 @@ if __name__ == "__main__":
         parser.add_argument('--password-prefix', help='Password prefix')
         parser.add_argument('--rarity', type=int, default=3, help='Rarity score threshold (default: 3)')
         parser.add_argument('--threads', type=int, default=1, help='Number of threads (default: 1)')
-        parser.add_argument('--r2-endpoint', help='Cloudflare R2 Endpoint URL')
-        parser.add_argument('--r2-access-key', help='R2 Access Key ID')
-        parser.add_argument('--r2-secret-key', help='R2 Secret Access Key')
-        parser.add_argument('--r2-bucket', help='R2 Bucket Name')
+        parser.add_argument('--firebase-url', help='Firebase Realtime Database URL (e.g. https://my-project.firebaseio.com)')
+        parser.add_argument('--firebase-secret', help='Firebase Database Secret (Legacy)')
         
         args = parser.parse_args()
 
@@ -1362,7 +1299,7 @@ if __name__ == "__main__":
                     is_ghost = True
                     selected_region = 'BR' # Ghost typically uses BR region internally in this script based on analysis
                 
-                run_generation(selected_region, args.count, args.name_prefix, args.password_prefix, args.rarity, args.threads, is_ghost, args.r2_endpoint, args.r2_access_key, args.r2_secret_key, args.r2_bucket)
+                run_generation(selected_region, args.count, args.name_prefix, args.password_prefix, args.rarity, args.threads, is_ghost, args.firebase_url, args.firebase_secret)
             else:
                 # Interactive Mode (Default)
                 main_menu()

@@ -51,11 +51,10 @@ on:
         required: false
         default: false
         type: boolean
-      r2_bucket:
-        description: 'Cloudflare R2 Bucket Name'
+      firebase_url:
+        description: 'Firebase Database URL (e.g. https://your-db.firebaseio.com)'
         required: false
         type: string
-        default: 'ff-gen-bucket'
 
 jobs:
   generate:
@@ -75,7 +74,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install requests pycryptodome colorama urllib3 psutil boto3
+        pip install requests pycryptodome colorama urllib3 psutil
 
     - name: Run Generator
       env:
@@ -86,10 +85,8 @@ jobs:
         RARITY: ${{ inputs.rarity }}
         THREADS: ${{ inputs.threads }}
         GHOST: ${{ inputs.ghost_mode }}
-        R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-        R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
-        R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
-        R2_BUCKET: ${{ inputs.r2_bucket }}
+        FIREBASE_URL: ${{ inputs.firebase_url || secrets.FIREBASE_URL }}
+        FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
       run: |
         REGION_ARG="$REGION"
         if [ "$GHOST" = "true" ]; then
@@ -101,9 +98,9 @@ jobs:
         # Build command arguments
         CMD_ARGS="--mode cli --region $REGION_ARG --count $COUNT --name-prefix $NAME_PREFIX --password-prefix $PASS_PREFIX --rarity $RARITY --threads $THREADS"
         
-        if [ ! -z "$R2_ENDPOINT" ] && [ ! -z "$R2_ACCESS_KEY" ]; then
-          echo "R2 integration enabled."
-          CMD_ARGS="$CMD_ARGS --r2-endpoint $R2_ENDPOINT --r2-access-key $R2_ACCESS_KEY --r2-secret-key $R2_SECRET_KEY --r2-bucket $R2_BUCKET"
+        if [ ! -z "$FIREBASE_URL" ] && [ ! -z "$FIREBASE_SECRET" ]; then
+          echo "Firebase integration enabled."
+          CMD_ARGS="$CMD_ARGS --firebase-url $FIREBASE_URL --firebase-secret $FIREBASE_SECRET"
         fi
         
         python gen.py $CMD_ARGS
@@ -139,4 +136,4 @@ jobs:
           -f rarity="${{ inputs.rarity }}" \
           -f threads="${{ inputs.threads }}" \
           -f ghost_mode="${{ inputs.ghost_mode }}" \
-          -f r2_bucket="${{ inputs.r2_bucket }}"
+          -f firebase_url="${{ inputs.firebase_url }}"
