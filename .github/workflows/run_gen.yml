@@ -69,7 +69,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y tor torsocks netcat
+        sudo apt-get install -y tor torsocks netcat-openbsd
         python -m pip install --upgrade pip
         pip install requests pycryptodome colorama urllib3 psutil pysocks
 
