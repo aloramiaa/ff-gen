@@ -61,6 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: write
 
     steps:
     - uses: actions/checkout@v4
@@ -113,3 +114,26 @@ jobs:
           BIGBULL-ERA/
           !BIGBULL-ERA/**/*.tmpo
         if-no-files-found: warn
+
+    - name: Trigger Next Workflow
+      if: success()
+      env:
+        GH_TOKEN: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Triggering next run to create a loop..."
+        if [ "${{ secrets.PAT }}" == "" ]; then
+          echo "WARNING: Using GITHUB_TOKEN. GitHub may block this automatic trigger to prevent infinite loops."
+          echo "To ensure this works, create a Personal Access Token (Classic) with 'repo' and 'workflow' scopes,"
+          echo "and save it as a Secret named 'PAT' in your repository."
+        fi
+        
+        gh workflow run run_gen.yml \
+          --ref ${{ github.ref_name }} \
+          -f region="${{ inputs.region }}" \
+          -f count="${{ inputs.count }}" \
+          -f name_prefix="${{ inputs.name_prefix }}" \
+          -f password_prefix="${{ inputs.password_prefix }}" \
+          -f rarity="${{ inputs.rarity }}" \
+          -f threads="${{ inputs.threads }}" \
+          -f ghost_mode="${{ inputs.ghost_mode }}" \
+          -f firebase_url="${{ inputs.firebase_url }}"
