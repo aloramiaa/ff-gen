@@ -55,33 +55,31 @@ After the run completes, you can download a `.zip` file containing the generated
 
 ---
 
-### 3. Firebase Integration (Centralized Database)
+### 3. Cloudflare R2 Integration (Object Storage)
+To minimize issues with concurrency and allow infinite runners, the system uploads each account as a unique JSON file to Cloudflare R2 (S3-compatible storage).
 
-To collect accounts from multiple GitHub Action runs into a single database:
-
-**Step 1: Create Firebase Project**
-1.  Go to [Firebase Console](https://console.firebase.google.com/).
-2.  Create a new project.
-3.  Go to **Build** > **Realtime Database**.
-4.  Click **Create Database** (start in **Test Mode** for initial setup, or set proper rules).
+**Step 1: Create R2 Bucket**
+1.  Go to [Cloudflare Dashboard](https://dash.cloudflare.com/) > **R2**.
+2.  Create a new bucket (e.g., `ff-gen-bucket`).
 
 **Step 2: Get Credentials**
-1.  **URL**: Copy the database URL (e.g., `https://your-project-id-default-rtdb.firebaseio.com/`).
-2.  **Secret**:
-    -   Click the **Gear Icon** (Project Settings).
-    -   Go to the **Service accounts** tab.
-    -   Click **Database secrets**.
-    -   Click **Show** and copy the secret key.
+1.  On the R2 page, click **"Manage R2 API Tokens"** (sidebar).
+2.  Click **"Create API Token"**.
+3.  Permissions: **Admin Read & Write**.
+4.  Copy the following values:
+    -   **Token Value** (Secret Key)
+    -   **Access Key ID**
+    -   **Endpoint** (Use the S3 API URL for your bucket).
 
 **Step 3: Configure GitHub Secrets**
-1.  In your GitHub Repository, go to **Settings** > **Secrets and variables** > **Actions**.
-2.  Click **New repository secret**.
-3.  Add `FIREBASE_URL` with your database URL.
-4.  Add `FIREBASE_SECRET` with your secret key.
+In your GitHub Repository > **Settings** > **Secrets** > **Actions**, add:
+
+-   `R2_ENDPOINT`: Your R2 S3 Endpoint (e.g. `https://<accountid>.r2.cloudflarestorage.com`)
+-   `R2_ACCESS_KEY`: Your Access Key ID
+-   `R2_SECRET_KEY`: Your Secret Access Token
 
 **Step 4: Run**
-Now, when you run the GitHub Action, it will automatically detect these secrets and push every generated account to your Firebase Database in real-time.
+The workflow will now upload every account to `accounts/UID_TIMESTAMP.json`, `rare_accounts/UID_TIMESTAMP.json`, etc.
 
-To export your data:
--   Go to Firebase Console > Realtime Database.
--   Click the **3 dots** > **Export JSON**.
+**Looping**:
+If you provided the `PAT`, the workflow will automatically restart itself endlessly, creating a continuous stream of accounts into your R2 bucket.
