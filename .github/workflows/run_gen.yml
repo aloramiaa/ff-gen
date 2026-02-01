@@ -68,8 +68,22 @@ jobs:
 
     - name: Install dependencies
       run: |
+        sudo apt-get update
+        sudo apt-get install -y tor torsocks netcat
         python -m pip install --upgrade pip
-        pip install requests pycryptodome colorama urllib3 psutil
+        pip install requests pycryptodome colorama urllib3 psutil pysocks
+
+    - name: Start IP Rotation (bbc.sh)
+      run: |
+        chmod +x bbc.sh
+        # Run bbc.sh in the background to handle Tor startup and IP rotation
+        # We redirect output to avoid cluttering logs, but script runs continuously
+        ./bbc.sh > /dev/null 2>&1 &
+        
+        # Wait for Tor to bootstrap
+        echo "Waiting for Tor to initialize..."
+        timeout 60s bash -c 'until nc -z 127.0.0.1 9050; do sleep 1; done'
+        echo "Tor is ready."
 
     - name: Run Generator
       env:
@@ -80,6 +94,9 @@ jobs:
         RARITY: ${{ inputs.rarity }}
         THREADS: ${{ inputs.threads }}
         GHOST: ${{ inputs.ghost_mode }}
+        # Configure requests to use Tor SOCKS proxy
+        HTTP_PROXY: socks5://127.0.0.1:9050
+        HTTPS_PROXY: socks5://127.0.0.1:9050
       run: |
         REGION_ARG="$REGION"
         if [ "$GHOST" = "true" ]; then
@@ -87,6 +104,11 @@ jobs:
         fi
         
         echo "Running generator for region: $REGION_ARG, count: $COUNT"
+        echo "Using Tor Proxy: $HTTPS_PROXY"
+        
+        # Check current IP through proxy to verify rotation/connection
+        echo "Current IP via Tor:"
+        curl -x socks5h://127.0.0.1:9050 -s https://checkip.amazonaws.com || echo "Failed to check IP"
         
         python gen.py \
           --mode cli \
