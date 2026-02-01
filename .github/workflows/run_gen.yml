@@ -1,0 +1,108 @@
+name: Run Account Generator
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Target Region (IND, ID, BR, ME, VN, TH, CIS, BD, PK, SG, SAC, TW)'
+        required: true
+        default: 'IND'
+        type: choice
+        options:
+        - IND
+        - ID
+        - BR
+        - ME
+        - VN
+        - TH
+        - CIS
+        - BD
+        - PK
+        - SG
+        - SAC
+        - TW
+      count:
+        description: 'Number of accounts to generate'
+        required: true
+        default: '1'
+        type: string
+      name_prefix:
+        description: 'Account Name Prefix'
+        required: true
+        default: 'Bot'
+        type: string
+      password_prefix:
+        description: 'Password Prefix'
+        required: true
+        default: 'Pass'
+        type: string
+      rarity:
+        description: 'Rarity Threshold (1-10)'
+        required: false
+        default: '3'
+        type: string
+      threads:
+        description: 'Number of Threads'
+        required: false
+        default: '1'
+        type: string
+      ghost_mode:
+        description: 'Enable Ghost Mode'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pycryptodome colorama urllib3 psutil
+
+    - name: Run Generator
+      env:
+        REGION: ${{ inputs.region }}
+        COUNT: ${{ inputs.count }}
+        NAME_PREFIX: ${{ inputs.name_prefix }}
+        PASS_PREFIX: ${{ inputs.password_prefix }}
+        RARITY: ${{ inputs.rarity }}
+        THREADS: ${{ inputs.threads }}
+        GHOST: ${{ inputs.ghost_mode }}
+      run: |
+        REGION_ARG="$REGION"
+        if [ "$GHOST" = "true" ]; then
+          REGION_ARG="GHOST"
+        fi
+        
+        echo "Running generator for region: $REGION_ARG, count: $COUNT"
+        
+        python gen.py \
+          --mode cli \
+          --region "$REGION_ARG" \
+          --count "$COUNT" \
+          --name-prefix "$NAME_PREFIX" \
+          --password-prefix "$PASS_PREFIX" \
+          --rarity "$RARITY" \
+          --threads "$THREADS"
+
+    - name: Archive Generated Accounts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: generated-accounts
+        path: |
+          BIGBULL-ERA/
+          !BIGBULL-ERA/**/*.tmpo
+        if-no-files-found: warn
