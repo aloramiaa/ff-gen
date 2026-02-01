@@ -38,7 +38,24 @@ TARGET_ACCOUNTS = 0
 RARE_COUNTER = 0
 COUPLES_COUNTER = 0
 RARITY_SCORE_THRESHOLD = 3
+RARITY_SCORE_THRESHOLD = 3
 LOCK = threading.Lock()
+FIREBASE_URL = None
+FIREBASE_SECRET = None
+
+def upload_to_firebase(data, node):
+    global FIREBASE_URL, FIREBASE_SECRET
+    if not FIREBASE_URL:
+        return
+    
+    try:
+        url = f"{FIREBASE_URL}/{node}.json"
+        if FIREBASE_SECRET:
+            url += f"?auth={FIREBASE_SECRET}"
+            
+        requests.post(url, json=data, timeout=10)
+    except Exception as e:
+        print_error(f"Firebase upload failed: {e}")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_FOLDER = os.path.join(CURRENT_DIR, "BIGBULL-ERA")
@@ -229,6 +246,11 @@ def save_rare_account(account_data, rarity_type, reason, rarity_score, is_ghost=
                 with open(temp_filename, 'w', encoding='utf-8') as f:
                     json.dump(rare_list, f, indent=2, ensure_ascii=False)
                 os.replace(temp_filename, rare_filename)
+                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(rare_entry, "rare_accounts")).start()
+                    
                 return True
             else:
                 return False
@@ -284,6 +306,11 @@ def save_couples_account(account1, account2, reason, is_ghost=False):
                 with open(temp_filename, 'w', encoding='utf-8') as f:
                     json.dump(couples_list, f, indent=2, ensure_ascii=False)
                 os.replace(temp_filename, couples_filename)
+                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(couples_entry, "couples_accounts")).start()
+
                 return True
             else:
                 return False
@@ -517,7 +544,13 @@ def save_jwt_token(account_data, jwt_token, region, is_ghost=False):
                 with open(temp_filename, 'w', encoding='utf-8') as f:
                     json.dump(tokens_list, f, indent=2, ensure_ascii=False)
                 
+                
                 os.replace(temp_filename, token_filename)
+                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(token_entry, "jwt_tokens")).start()
+
                 return True
             else:
                 return False
@@ -561,7 +594,13 @@ def save_normal_account(account_data, region, is_ghost=False):
                 with open(temp_filename, 'w', encoding='utf-8') as f:
                     json.dump(accounts_list, f, indent=2, ensure_ascii=False)
                 
+                
                 os.replace(temp_filename, account_filename)
+                
+                # Upload to Firebase
+                if FIREBASE_URL:
+                    threading.Thread(target=upload_to_firebase, args=(account_entry, "accounts")).start()
+
                 return True
             else:
                 return False
@@ -1069,11 +1108,17 @@ def generate_accounts_flow():
 
     run_generation(selected_region, account_count, account_name, password_prefix, RARITY_SCORE_THRESHOLD, thread_count, is_ghost)
 
-def run_generation(region, account_count, account_name, password_prefix, rarity_threshold, thread_count, is_ghost=False):
-    global SUCCESS_COUNTER, TARGET_ACCOUNTS, RARE_COUNTER, COUPLES_COUNTER, EXIT_FLAG, RARITY_SCORE_THRESHOLD
+def run_generation(region, account_count, account_name, password_prefix, rarity_threshold, thread_count, is_ghost=False, firebase_url=None, firebase_secret=None):
+    global SUCCESS_COUNTER, TARGET_ACCOUNTS, RARE_COUNTER, COUPLES_COUNTER, EXIT_FLAG, RARITY_SCORE_THRESHOLD, FIREBASE_URL, FIREBASE_SECRET
     
     # Initialize globals
     RARITY_SCORE_THRESHOLD = rarity_threshold
+    FIREBASE_URL = firebase_url
+    FIREBASE_SECRET = firebase_secret
+    
+    if FIREBASE_URL:
+        # Strip trailing slash
+        FIREBASE_URL = FIREBASE_URL.rstrip('/')
 
     start_time = time.time()
     threads = []
@@ -1230,6 +1275,8 @@ if __name__ == "__main__":
         parser.add_argument('--password-prefix', help='Password prefix')
         parser.add_argument('--rarity', type=int, default=3, help='Rarity score threshold (default: 3)')
         parser.add_argument('--threads', type=int, default=1, help='Number of threads (default: 1)')
+        parser.add_argument('--firebase-url', help='Firebase Realtime Database URL (e.g. https://my-project.firebaseio.com)')
+        parser.add_argument('--firebase-secret', help='Firebase Database Secret (Legacy)')
         
         args = parser.parse_args()
 
@@ -1246,7 +1293,7 @@ if __name__ == "__main__":
                     is_ghost = True
                     selected_region = 'BR' # Ghost typically uses BR region internally in this script based on analysis
                 
-                run_generation(selected_region, args.count, args.name_prefix, args.password_prefix, args.rarity, args.threads, is_ghost)
+                run_generation(selected_region, args.count, args.name_prefix, args.password_prefix, args.rarity, args.threads, is_ghost, args.firebase_url, args.firebase_secret)
             else:
                 # Interactive Mode (Default)
                 main_menu()
