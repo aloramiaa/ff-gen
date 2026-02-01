@@ -264,6 +264,13 @@ def save_rare_account(account_data, rarity_type, reason, rarity_score, is_ghost=
             'thread_id': account_data.get('thread_id', 'N/A')
         }
         
+        # Upload to R2 (Prioritize Cloud Storage)
+        if R2_BUCKET:
+            try:
+                threading.Thread(target=upload_to_r2, args=(rare_entry, "rare_accounts")).start()
+            except Exception as e:
+                print_error(f"Failed to start R2 upload thread: {e}")
+
         file_lock = get_file_lock(rare_filename)
         with file_lock:
             rare_list = []
@@ -287,10 +294,6 @@ def save_rare_account(account_data, rarity_type, reason, rarity_score, is_ghost=
                     json.dump(rare_list, f, indent=2, ensure_ascii=False)
                 os.replace(temp_filename, rare_filename)
                 
-                # Upload to R2
-                if R2_BUCKET:
-                    threading.Thread(target=upload_to_r2, args=(rare_entry, "rare_accounts")).start()
-                    
                 return True
             else:
                 return False
@@ -328,6 +331,13 @@ def save_couples_account(account1, account2, reason, is_ghost=False):
             'date_matched': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
+        # Upload to R2 (Prioritize Cloud Storage)
+        if R2_BUCKET:
+            try:
+                threading.Thread(target=upload_to_r2, args=(couples_entry, "couples_accounts")).start()
+            except Exception as e:
+                print_error(f"Failed to start R2 upload thread: {e}")
+
         file_lock = get_file_lock(couples_filename)
         with file_lock:
             couples_list = []
@@ -351,10 +361,6 @@ def save_couples_account(account1, account2, reason, is_ghost=False):
                     json.dump(couples_list, f, indent=2, ensure_ascii=False)
                 os.replace(temp_filename, couples_filename)
                 
-                # Upload to R2
-                if R2_BUCKET:
-                    threading.Thread(target=upload_to_r2, args=(couples_entry, "couples_accounts")).start()
-
                 return True
             else:
                 return False
@@ -571,6 +577,13 @@ def save_jwt_token(account_data, jwt_token, region, is_ghost=False):
             'thread_id': account_data.get('thread_id', 'N/A')
         }
         
+        # Upload to R2 (Prioritize Cloud Storage)
+        if R2_BUCKET:
+            try:
+                threading.Thread(target=upload_to_r2, args=(token_entry, "jwt_tokens")).start()
+            except Exception as e:
+                print_error(f"Failed to start R2 upload thread: {e}")
+
         file_lock = get_file_lock(token_filename)
         with file_lock:
             tokens_list = []
@@ -593,12 +606,10 @@ def save_jwt_token(account_data, jwt_token, region, is_ghost=False):
                 os.replace(temp_filename, token_filename)
                 
                 
+                
+                
                 os.replace(temp_filename, token_filename)
                 
-                # Upload to R2
-                if R2_BUCKET:
-                    threading.Thread(target=upload_to_r2, args=(token_entry, "jwt_tokens")).start()
-
                 return True
             else:
                 return False
@@ -624,6 +635,13 @@ def save_normal_account(account_data, region, is_ghost=False):
             'thread_id': account_data.get('thread_id', 'N/A')
         }
         
+        # Upload to R2 (Prioritize Cloud Storage)
+        if R2_BUCKET:
+            try:
+                threading.Thread(target=upload_to_r2, args=(account_entry, "accounts")).start()
+            except Exception as e:
+                print_error(f"Failed to start R2 upload thread: {e}")
+
         file_lock = get_file_lock(account_filename)
         with file_lock:
             accounts_list = []
@@ -646,12 +664,10 @@ def save_normal_account(account_data, region, is_ghost=False):
                 os.replace(temp_filename, account_filename)
                 
                 
+                
+                
                 os.replace(temp_filename, account_filename)
                 
-                # Upload to R2
-                if R2_BUCKET:
-                    threading.Thread(target=upload_to_r2, args=(account_entry, "accounts")).start()
-
                 return True
             else:
                 return False
