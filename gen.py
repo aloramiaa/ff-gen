@@ -53,7 +53,13 @@ def upload_to_firebase(data, node):
         if FIREBASE_SECRET:
             url += f"?auth={FIREBASE_SECRET}"
             
-        requests.post(url, json=data, timeout=10)
+        response = requests.post(url, json=data, timeout=10)
+        if response.status_code == 200:
+            # Use color codes directly or helper if available in thread context, 
+            # safely falling back to print if Helpers aren't thread-safe (they are just prints)
+            print(f"{Fore.LIGHTGREEN_EX}{Colors.BRIGHT}✅ Firebase upload successful: {node}{Colors.RESET}")
+        else:
+            print(f"{Fore.YELLOW}{Colors.BRIGHT}⚠️ Firebase upload returned: {response.status_code}{Colors.RESET}")
     except Exception as e:
         print_error(f"Firebase upload failed: {e}")
 
